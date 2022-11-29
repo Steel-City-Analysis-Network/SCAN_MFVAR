@@ -1,0 +1,146 @@
+---
+title: "SCAN GDP Q estimates"
+author: "Caleb"
+date: "2022-11-16"
+output: html_document
+---
+
+```{r}
+library(tidyverse) 
+library(dbplyr) 
+library(ggthemes)
+library(ggplot2) 
+
+##rm(list=ls())
+q.wages <- read.csv("SCAN/quarterly.wages.csv") 
+a.wage.data <- read.csv("SCAN/annual.wages.data.csv") 
+
+df <- full_join(q.wages, a.wage.data)
+```
+
+```{r} 
+df$year1 <- substr(df$year, 1, 4)
+
+df$pgh.l.s.g <- df$pgh_labor_share_gdp
+df2 <- df %>% 
+  fill(pgh.l.s.g)
+
+df2 <- df2 %>% 
+  filter(year1 >= 2001 & year < 2021) 
+df2$gdp.hat <- ((4 * df2$q_wages_dollars) / (df2$pgh.l.s.g)) 
+
+g <- df2 %>% 
+  group_by(year1) %>% 
+  summarise(mean(gdp.hat)) 
+
+df3 <- full_join(df2, g)
+
+df3$cali <- df3$pgh_gdp_dollars - df3$`mean(gdp.hat)`
+
+summary(df3$cali)
+
+# make a difference/total real gdp for percent difference 
+
+df3$cali.percent <- df3$cali / df3$pgh_gdp_dollars
+```
+## Plot GDP and Q GDP hat 
+```{r} 
+a <- df3.y$year1
+a
+# inputs
+gdp.comp.graph <- df3 %>% 
+  select("year", "gdp.hat", "pgh_gdp_dollars") %>% 
+  gather(key = "variable", value = "value", -year)
+gdp.comp.graph$year <- as.character.Date(gdp.comp.graph$year)
+
+gdp.comp.graph$year1 <- substr(gdp.comp.graph$year, 1, 4)
+
+p2 <- ggplot(data = gdp.comp.graph, mapping = aes(x = year, y = value)) 
+p2 + geom_point(aes(color = variable)) + 
+  scale_x_discrete(breaks = gdp.comp.graph$year[c(T,F,F,F,F)]) 
+
+```
+
+## Calibration Values 
+```{r} 
+# graph calibration values 
+p <- ggplot(data = df3, mapping = aes(x = cali))
+p + geom_histogram()
+
+p.p <- ggplot(data = df3, mapping = aes(x = cali.percent))
+p.p + geom_histogram() 
+summary(df3$cali)
+summary(df3$cali.percent)
+
+# output calibration values in dollars 
+df3$cali.percent.subset <- ifelse(is.na(df3$cali.percent), 0, 
+                                  1)
+df3.y <- df3 %>% 
+  filter(cali.percent.subset == 1)
+df3.y$cali
+```
+```{r} 
+
+
+## make a percent change in labor share of gdp 
+df3.y$labor_share_percentchange <- (((lag(df3.y$pgh_labor_share_gdp) - df3.y$pgh_labor_share_gdp) / lag(df3.y$pgh_labor_share_gdp))  * 100)
+
+summary(df3.y$labor_share_percentchange)
+
+```
+## Plot average Q GDP hat (annual) and known gdp 
+```{r}
+gdp.graph <- df3.y %>%  
+  select("year", "mean(gdp.hat)", "pgh_gdp_dollars") %>% 
+  gather(key = "variable", value = "value", -year)
+
+p.g <- ggplot(data = gdp.graph, mapping = aes(x = year, y = value)) 
+p.g + geom_point(aes(color = variable))
+  
+```
+## basic plots of labor share and gdp
+
+
+```{r}
+p <- ggplot(data = df, mapping = aes(x = pgh_gdp_dollars, y = pgh_labor_share_gdp))
+p + geom_point() + geom_smooth()
+
+p1 <- ggplot(data = df, mapping = aes(x = pgh_labor_share_gdp, y = pgh_gdp_dollars))
+p1 + geom_point() 
+```
+
+## linear regression
+
+
+
+```{r}
+df$gdp_millions <- df$pgh_gdp_dollars * 1000000
+fit <- lm(data = df, pgh_gdp_dollars ~ I(1/pgh_labor_share_gdp))
+summary(fit) 
+
+fit2 <- lm(data = df, gdp_millions ~ I(1/pgh_labor_share_gdp))
+summary(fit2)
+
+fit1 <- lm(data = df, I(1/pgh_labor_share_gdp) ~ pgh_gdp_dollars) 
+summary(fit1)
+```
+
+## US data 
+```{r} 
+annual.us <- read.csv("SCAN/Annual.csv") 
+q.us <- read.csv("SCAN/Quarterly.csv") 
+## clean annual data 
+
+annual.us$labor_share <- annual.us$GDP_BA06RC1A027NBEA
+annual.us$year <- substr(annual.us$DATE, 1, 4)
+annual.us$gdp_yearly <- annual.us$GDP
+annual.us1 <- annual.us  %>% 
+  filter(year >= 1983 & year <2021) %>% 
+  select("year", "DATE", "labor_share", "gdp_yearly") 
+
+# join annual and quarterly us data 
+df.us <- full_join(annual.us1, q.us)
+
+
+
+```

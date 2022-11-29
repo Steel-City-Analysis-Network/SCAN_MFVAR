@@ -1,0 +1,238 @@
+---
+title: "MFBVAR Alpha Verison"
+author: "Caleb"
+date: "2022-11-26"
+output: html_document
+---
+
+```{r}
+## load libraries
+library(purrr)
+library(tidyverse)
+library(dbplyr)
+library(mfbvar)
+```
+
+## Load in Data 
+```{r}
+# load in data set from cleaning 
+df <- read.csv("SCAN/mfvar.alpha.verison.csv")
+``` 
+
+## Transform Data 
+
+You can also embed plots, for example:
+
+```{r}
+df.q <- read.csv("mfvar/quarterly.input.correct.csv")
+df.m <- read.csv("mfvar/monthly.input.mfvar.pa.csv")
+
+#join quarterly and monthly data 
+
+df.mfvar <- full_join(df.m, df.q)
+
+# select rows that you need, montly variables before quarterly ones 
+
+df.alpha <- df.mfvar %>% 
+  select("DATE", "ur", "manemp", "rgdp", "fpi")
+# create log diff function
+
+log_diff <- function(x, lag = 1) {c(rep(NA, lag), 1200/lag * diff(log(x), lag = lag))}
+
+# turn variables into log diffs, keep unemployment rate as is, already rate 
+ 
+df.alpha1 <- df.alpha %>% 
+  mutate(ur = ur, 
+         manemp = log_diff(manemp), 
+         rgdp = log_diff(rgdp, lag = 3), 
+         fpi = log_diff(fpi, lag = 3))
+
+# need to start with a full row and end with a full row 
+
+df.beta <- df.beta[-nrow(df.beta),]
+# removes first n number of rows in c(n), 5 is specfic to monthly and quarterly data 
+df.beta <- df.beta %>%  filter(!row_number() %in% c(1, 2, 3, 4, 5))
+```
+## Set Prior 
+```{r} 
+
+# set the prior, freq = c(put the frequency of every variable, going to be annoying for big data sets, not sure what n_burnin and n_reps does)
+prior <- set_prior(Y = df.alpha2, freq = c("m", "m", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+# plot initial prior 
+plot(prior)
+
+# print the prior, tells us what kinds of prior we can use 
+prior 
+
+```
+## Calculate Steady-State Prior 
+```{r} 
+# get steady state means for the prior, I think this is just for a steady state prior, but not sure how we would do this for a minnesota style prior, not sure how to get the 95% confidence intervals in r, need sample mean and then standard erorr but defintely a function that can do it for me
+n <- colSums(!is.na(df.alpha2))
+n 
+# calculate confidence interval for ur 
+xbar.ur <- mean(df.alpha2$ur, na.rm = t) 
+n.ur <- n[2]
+sd.ur <- sd(df.alpha2$ur, na.rm = T) 
+margin.ur <- qt(0.975,df=n.ur-1)*sd.ur/sqrt(n.ur)
+
+lb.ur <- xbar.ur - margin.ur 
+
+ub.ur <- xbar.ur + margin.ur 
+
+ci.ur <- c(lb.ur, ub.ur)
+
+ci.ur 
+
+# this is really wide, I think the log differences got fucked up but we're just going to run with it 
+
+
+#calculate confidence intveral for manemp 
+xbar.manemp <- mean(df.alpha2$manemp, na.rm = T) 
+n.manemp <- n[3]
+sd.manemp <- sd(df.alpha2$manemp, na.rm = T) 
+margin.manemp <- qt(0.975,df=n.manemp-1)*sd.manemp/sqrt(n.manemp)
+
+lb.manemp <- xbar.manemp - margin.manemp
+
+ub.manemp <- xbar.manemp + margin.manemp 
+
+ci.manemp <- c(lb.manemp, ub.manemp)
+
+ci.manemp
+
+
+# CI for rgdp 
+xbar.rgdp <- mean(df.alpha2$rgdp, na.rm = T) 
+n.rgdp <- n[4]
+sd.rgdp <- sd(df.alpha2$rgdp, na.rm = T) 
+margin.rgdp <- qt(0.975,df=n.rgdp-1)*sd.rgdp/sqrt(n.rgdp)
+
+
+lb.rgdp <- xbar.rgdp - margin.rgdp
+
+ub.rgdp <- xbar.rgdp + margin.rgdp
+
+ci.rgdp <- c(lb.rgdp, ub.rgdp)
+
+ci.rgdp
+
+# CI for fpi 
+xbar.fpi <- mean(df.alpha2$fpi, na.rm = T) 
+n.fpi <- n[5]
+sd.fpi <- sd(df.alpha2$fpi, na.rm = T) 
+margin.fpi <- qt(0.975,df=n.fpi-1)*sd.fpi/sqrt(n.fpi)
+
+lb.fpi <- xbar.fpi - margin.fpi
+
+ub.fpi <- xbar.fpi + margin.fpi
+
+ci.fpi <- c(lb.fpi, ub.fpi)
+
+ci.fpi
+
+```
+## Update Prior w/ Steady State 
+```{r}
+
+# update prior to include steady state data 
+prior_intervals <- matrix(data = c(ci.ur,
+                             ci.manemp, 
+                             ci.rgdp, 
+                             ci.fpi), ncol = 2,byrow = TRUE)
+
+# print matrix to double check 
+
+prior_intervals
+# not sure what this does, assume it just converts it to a useable form  
+moments <- interval_to_moments(prior_intervals)
+prior <- update_prior(prior, d = "intercept",
+                      prior_psi_mean = moments$prior_psi_mean,
+                      prior_psi_Omega = moments$prior_psi_Omega)
+
+#plot prior results 
+
+plot(prior)
+
+# update prior to specficy how long you want to forecast out 
+prior <- update_prior(prior, n_fcst = 24)
+
+# pull summary of prior 
+summary(prior)
+
+```
+
+## Create prior with block exogenous variables 
+```{r} 
+prior.exo <- set_prior(Y = df.alpha2, freq = c("m", "m", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000, block_exo = c("fpi", "manemp"), n_fcst = 24)
+prior.exo
+```
+## Run model w/ Minnesota Prior and exogenous variables 
+```{r} 
+mod.minn.exo <- estimate_mfbvar(prior.exo, prior = "minn", variance = "diffuse")
+
+predict(mod.minn.exo, pred_bands = .95)
+
+plot(mod.minn.exo)
+```
+## Run model 
+
+```{r} 
+
+# run model with steady state prior
+modv1.0 <- estimate_mfbvar(prior, prior = "ss", variance = "iw")
+
+modv1.0 
+
+```
+## Get Results 
+```{r}
+# get results 
+
+predict(modv1.0, pred_bands = NULL)
+
+predict(modv1.0, aggregate_fcst = TRUE, pred_bands = .8)
+```
+
+## Min Prior Model 
+```{r} 
+# run model with minn prior 
+mod.minn.iw <- estimate_mfbvar(prior, prior = "minn", variance = "iw")
+
+mod.minn.iw
+
+
+```
+
+## Get Results 
+```{r} 
+# predict model with 95% confidence intervals 
+df.mod.minn.iw95 <- predict(mod.minn.iw, aggregate_fcst = TRUE, pred_bands = .95)
+
+df.mod.minn.iw95
+
+df.mod.minn.iw95 <- as.data.frame(df.mod.minn.iw95)
+
+# predict model with 80% confidence intervals
+
+df.mod.minn.iw <- predict(mod.minn.iw, aggregate_fcst = TRUE, pred_bands = .8)
+
+df.mod.minn.iw
+
+df.mod.minn.iw <- as.data.frame(df.mod.minn.iw)
+```
+## Try to plot minn model 
+```{r} 
+plot(mod.minn.iw, plot_start = "2005-08-01", nrow_facet = 3)
+
+```
+## Get MDD for model w/ steady state prior 
+```{r} 
+mdd(mod_ss_iw)
+```
+
+## Get MDD for model w/ Minnesota Prior 
+```{r} 
+#p_trunc giving the degree of truncation of the truncated normal distribution, needed when run model w/ a minnesota prior 
+mdd(mod.minn.iw, p_trunc = 1)
+```

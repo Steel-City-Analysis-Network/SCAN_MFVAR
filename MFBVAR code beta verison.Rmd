@@ -1,0 +1,159 @@
+---
+title: "MFBVAR Beta Verison"
+author: "Caleb"
+date: "2022-11-28"
+output: html_document
+---
+
+```{r} 
+#rm(list=ls())
+library(mfbvar)
+library(dbplyr)
+library(tidyverse)
+```
+
+## Load in Data/Transform Data
+
+```{r}
+df.q <- read.csv("mfvar/quarterly.input.correct.csv")
+df.m <- read.csv("mfvar/monthly.input.mfvar.pa.csv")
+
+#join quarterly and monthly data 
+
+df.mfvar <- full_join(df.m, df.q)
+
+# create log diff function 
+log_diff <- function(x, lag = 1) {c(rep(NA, lag), 1200/lag * diff(log(x), lag = lag))}
+
+
+# print out variable names 
+ls(df.mfvar)
+
+# get just quarterly variable names
+ls(df.q)
+
+# get just monthly variables 
+ls(df.m)
+# # turn variables into log differences
+
+
+ 
+df.beta <- df.mfvar %>% 
+  mutate( 
+  # do the quarterly variables with lag 3 to get log growth between lags 
+         fpi = log_diff(fpi, lag = 3), 
+         gce = log_diff(gce, lag = 3), 
+         outms = log_diff(outms, lag = 3),
+         pahouse = log_diff(pahouse, lag = 3),
+         pamangdp = log_diff(pamangdp, lag = 3),
+         papi = log_diff(papi, lag = 3),
+         pargdp = log_diff(pargdp, lag = 3),
+         patax = log_diff(patax, lag =3),
+         rgdp = log_diff(rgdp, lag = 3),
+# do monthly variables 
+         ur = log_diff(ur),
+         baa = log_diff(baa), 
+         fedfunds = log_diff(fedfunds),
+         gs10 = log_diff(gs10), 
+         indpro = log_diff(indpro), 
+         manemp = log_diff(manemp), 
+         paclaims = log_diff(paclaims), 
+         paclf = log_diff(paclf), 
+         paemp = log_diff(paemp), 
+         pamanemp = log_diff(pamanemp), 
+         papermits = log_diff(papermits), 
+         paur = log_diff(paur), 
+         pce = log_diff(pce), 
+         pcepi = log_diff(pcepi), 
+         pcepilfe = log_diff(pcepilfe)) %>% 
+    # filter out variables that don't start at 2005 
+  select(-"hrs", -"wage", -"manwage", -"pamanwage")
+
+# need to start with a full row and end with a full row 
+
+# start end with full row, delete last row 
+df.beta <- df.beta[-nrow(df.beta),]
+df.beta <- df.beta %>%  filter(!row_number() %in% c(1, 2, 3, 4, 5))
+```
+
+## Set Prior
+
+```{r}
+# set the prior, freq = c(put the frequency of every variable, going to be annoying for big data sets, not sure what n_burnin and n_reps does)
+prior <- set_prior(Y = df.beta, freq = c("m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "q", "q", "q", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+# plot initial prior 
+plot(prior)
+
+# print the prior, tells us what kinds of prior we can use 
+prior 
+```
+## Update Prior for forecasting
+```{r} 
+# not going to do steady state prior and it seems to be a waste of code to try and do it 
+# update prior to specficy how long you want to forecast out 
+prior <- update_prior(prior, n_fcst = 24)
+
+# pull summary of prior 
+summary(prior)
+```
+## Run Model with Minn Prior 
+```{r} 
+# create model w/o using mdd to update minn prior 
+
+mod.minn.iw.beta <- estimate_mfbvar(prior, prior = "minn", variance = "iw")
+
+mod.minn.iw.beta
+```
+## Process Results 
+```{r} 
+# predict model w/ 95% confidence interval 
+
+df.mod.minn.iw.beta95 <- predict(mod.minn.iw.beta, aggregate_fcst = TRUE, pred_bands = .95)
+
+df.mod.minn.iw.beta95
+
+df.mod.minn.iw.beta95 <- as.data.frame(df.mod.minn.iw.beta95)
+```
+## Graph Results using ggplot
+```{r} 
+library(ggplot2) 
+library(ggthemes)
+
+p <- ggplot(data = df.mod.minn.iw.beta95, mapping = aes(x = fcst_date, y = median)) 
+
+p + geom_line(aes(color = variable))
+
+```
+## Looking at Fed Funds rate 
+```{r}
+# graph predicted fed funds rate 
+df.fed.funds.hat <- df.mod.minn.iw.beta95 %>% 
+  filter(variable == "fedfunds")
+
+ggplot(data = df.fed.funds.hat, mapping = aes(x = fcst_date, y = median)) + geom_line() 
+
+# load data for fed funds rate 
+df.fedfunds <- read.csv("SCAN/FEDFUNDS.csv")
+
+df.fedfunds <- df.fedfunds %>% 
+  mutate(FEDFUNDS = log_diff(FEDFUNDS))
+## create a dummy variable column to filter out the years we don't want 
+
+df.fedfunds$rownumber <- seq.int(nrow(df.fedfunds))
+
+df.fedfunds <- df.fedfunds %>% 
+  filter(rownumber >= 816)
+
+### make a new data frame for graphing 
+df.fed.funds.hat$DATE <- df.fed.funds.hat$fcst_date
+df.fedfunds$DATE <- as.Date(df.fedfunds$DATE)
+df.fed.funds.graph <- full_join(df.fed.funds.hat, df.fedfunds)
+df.fed.funds.graph$real <- df.fed.funds.graph$FEDFUNDS
+df.fed.funds.graph$cali <- df.fed.funds.graph$real - df.fed.funds.graph$median
+## graph them 
+p.fedfunds.comp <- ggplot(date = df.fed.funds.graph, mapping = aes(x = fcst_date)) 
+p.fedfunds.comp + 
+  geom_line(data = df.fed.funds.graph, mapping = aes(y = real, color = "indianred")) + 
+  geom_line(data = df.fed.funds.graph, mapping = aes(y = median, color = "black"))
+```
+
