@@ -160,3 +160,44 @@ df.mod.minn.iw95 <- as.data.frame(df.mod.minn.iw95)
 plot(mod.minn.iw95, plot_start = "2005-03-01", nrow_facet = 3)
 ```
 ## Run Model with Block Exogenous variables 
+## Set Prior 
+```{r} 
+# set prior 
+#set the prior, freq = c(put the frequency of every variable, going to be annoying for big data sets, not sure what n_burnin and n_reps does)
+prior.exo <- set_prior(Y = df1.logs, block_exo = c("gs10", "pcepi", "pcepilfe", "fedfunds", "baa", "paclaims", "fpi", "patax"), freq = c("m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "q", "q", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+
+# print prior to see what kinds of prior we can use 
+prior.exo
+# get summary of prior to check everything 
+summary(prior.exo)
+#plot prior to get it visualized 
+plot(prior.exo)
+```
+# Update Prior to forecast 
+```{r} 
+prior.exo <- update_prior(prior.exo, n_fcst = 24) 
+
+summary(prior.exo)
+```
+## Run model with Minn prior and variance = diffuse 
+```{r} 
+mod.minn.diffuse <- estimate_mfbvar(prior.exo, prior = "minn", vairnace = "diffuse") 
+
+mod.minn.diffuse 
+```
+## Process Minn prior and diffuse variance results 
+```{r} 
+# predict model w/ 95% confidence interval 
+
+df.mod.minn.diffuse95 <- predict(mod.minn.diffuse, aggregate_fcst = TRUE, pred_bands = .95)
+
+df.mod.minn.diffuse95
+ # store as data frame 
+df.mod.minn.diffuse95 <- as.data.frame(df.mod.minn.diffuse95) 
+```
+## Print out underlying model of data and two forecasts 
+```{r}
+write.csv(df1.logs, "C:\\Users\\brobs\\Documents\\mfbvar_data.csv")
+write.csv(df.mod.minn.iw95, "C:\\Users\\brobs\\Documents\\mfbvar_minn_iw_95_fcst.csv")
+write.csv(df.mod.minn.diffuse95, "C:\\Users\\brobs\\Documents\\mfbvar_minn_diffuse_95_exo_fcst.csv")
+```
