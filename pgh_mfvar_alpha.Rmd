@@ -41,4 +41,60 @@ df.m <- full_join(df.pgh.m, df.nat.pa.m)
 ```{r}
 # the national and state variables should enter the model as exogenous but the package doesn't really allow that, we're going to try and tinker with it but will also run model where they aren't exogenous 
 df1 <- full_join(df.m, df.q)
+
+# load in estimated pittsburgh gdp data 
+df.pgh.gdp <- read.csv("mfvar/EstimatedPGHgdp.csv") 
+# get rid of x column in pittsburgh gdp data 
+df.pgh.gdp <- df.pgh.gdp %>% 
+  select("DATE", "pghngdp") 
+
+df1 <- full_join(df1, df.pgh.gdp) 
+```
+## Transform Data  
+```{r} 
+# load stats package to run log diff and lag stuff 
+library(stats)
+# going to run model with all variables not just pittsburgh ones 
+# turn growth rates into logs, turn regular numbers into log differences using diff(log()) 
+# create log_diff function to do the lags, different from the one in the package but not sure what 1200 is doing there so 
+# going to use log_diff from package but I think we should create our own function, doesn't look right 
+
+log_diff <- function(x, lag = 1) {c(rep(NA, lag), 1200/lag * diff(log(x), lag = lag))} 
+## create new df thats changed to logs 
+df1.logs <- df1 %>% 
+  mutate( 
+  # do the quarterly variables with lag 3 to get log growth between quarterly inputs  
+         fpi = log_diff(fpi, lag = 3), 
+         patax = log_diff(patax, lag =3),
+         pghaww = log_diff(pghaww, lag = 3), 
+         # pghmanuf is different because its already a growth rate comparing this quarter from the year before 
+         pghmanuf = log(pghmanuf), 
+         pghawwp = log_diff(pghawwp, lag =3), 
+         pghhouse = log_diff(pghhouse, lag = 3), 
+         pghngdp = log_diff(pghngdp, lag = 3),
+         pghqwage = log_diff(pghqwage, lag = 3), 
+# do monthly variables 
+          pghunemp = log_diff(pghunemp),
+         pghcivlabforce = log_diff(pghcivlabforce), 
+         baa = log_diff(baa), 
+         fedfunds = log_diff(fedfunds),
+         gs10 = log_diff(gs10),
+        pghavghourearn = log_diff(pghavghourearn), 
+        pghpermits = log_diff(pghpermits),
+         pghempmanuf = log_diff(pghempmanuf), 
+          pcepi = log_diff(pcepi), 
+         pcepilfe = log_diff(pcepilfe), 
+          paclaims = log_diff(paclaims))
+## print out coulmn names to double check 
+ls(df1)
+
+## clean up dates to start with full row and end with full row 
+# create dummy variable to remove rows 
+df1.logs$dummy <- seq.int(nrow(df1.logs))
+# remove pghavghourearn, doesn't start til 2007, row number 121, and last full row of data is Q3 of 2020 cause of pgh gdp 
+df1.logs <- df1.logs %>% 
+  filter(dummy >= 121 & dummy <= 370) %>% 
+  select(-"pghavghourearn", -"dummy")
+
+# remove first row 
 ```
