@@ -50,9 +50,9 @@ df.alpha1 <- df.alpha %>%
 
 # need to start with a full row and end with a full row 
 
-df.beta <- df.beta[-nrow(df.beta),]
+df.alpha2 <- df.alpha1[-nrow(df.alpha1),]
 # removes first n number of rows in c(n), 5 is specfic to monthly and quarterly data 
-df.beta <- df.beta %>%  filter(!row_number() %in% c(1, 2, 3, 4, 5))
+df.alpha2 <- df.alpha1 %>%  filter(!row_number() %in% c(1, 2, 3, 4, 5))
 ```
 ## Set Prior 
 ```{r} 
@@ -160,7 +160,11 @@ plot(prior)
 # update prior to specficy how long you want to forecast out 
 prior <- update_prior(prior, n_fcst = 24)
 
+```
+
 #grid search for hyperparameters
+
+```{r}
 
 #search for lambda 1 given lambda3 = 1
  par_fun <- function(lambda1, prior) {
@@ -179,7 +183,7 @@ lambda1_result <- parSapply(cl, lambda1_seq,
 stopCluster(cl)
 
 #update prior with new lambda1
-prior <- update_prior(prior, lambda1 = lambda1_result)
+prior <- update_prior(prior, lambda1 = mean(lambda1_result))
 
 #search for lambda 2 given lambda3 = 1
  par_fun <- function(lambda2, prior) {
@@ -198,7 +202,7 @@ lambda2_result <- parSapply(cl, lambda1_seq,
 stopCluster(cl)
 
 #update prior with new lambda1
-prior <- update_prior(prior, lambda2 = lambda2_result)
+prior <- update_prior(prior, lambda2 = mean(lambda2_result))
 
 # pull summary of prior 
 summary(prior)
