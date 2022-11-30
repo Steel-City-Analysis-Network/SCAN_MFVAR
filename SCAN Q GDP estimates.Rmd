@@ -45,6 +45,14 @@ df3$cali.percent <- df3$cali / df3$pgh_gdp_dollars
 ```
 ## Plot GDP and Q GDP hat 
 ```{r} 
+# output calibration values in dollars 
+df3$cali.percent.subset <- ifelse(is.na(df3$cali.percent), 0, 
+                                  1)
+df3.y <- df3 %>% 
+  filter(cali.percent.subset == 1)
+
+df3.y$cali
+
 a <- df3.y$year1
 a
 # inputs
@@ -72,12 +80,7 @@ p.p + geom_histogram()
 summary(df3$cali)
 summary(df3$cali.percent)
 
-# output calibration values in dollars 
-df3$cali.percent.subset <- ifelse(is.na(df3$cali.percent), 0, 
-                                  1)
-df3.y <- df3 %>% 
-  filter(cali.percent.subset == 1)
-df3.y$cali
+
 ```
 ```{r} 
 
@@ -143,4 +146,15 @@ df.us <- full_join(annual.us1, q.us)
 
 
 
+```
+
+## Output gdp hat data to use in mfvar 
+```{r} 
+# gdp it nominal because it had to be in order to get quarterly gdp estimates from yearly gdp using labor share of gdp 
+df3$DATE <- df3$year
+df3$pghngdp <- df3$gdp.hat
+df.output <- df3 %>% 
+  select("DATE", "pghngdp")
+ 
+write.csv(df.output, "C:\\Users\\brobs\\Documents\\EstimatedPGHgdp.csv")
 ```
