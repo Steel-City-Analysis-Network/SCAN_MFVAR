@@ -195,9 +195,47 @@ df.mod.minn.diffuse95
  # store as data frame 
 df.mod.minn.diffuse95 <- as.data.frame(df.mod.minn.diffuse95) 
 ```
+
+## Run model with just pittsburgh information 
+## Get just Pittsburgh data 
+```{r} 
+df.pgh.model <- df1.logs %>% 
+  select("DATE", "pghunemp", "pghcivlabforce", "pghpermits", "pghempmanuf", "pghaww", "pghmanuf", "pghawwp", "pghhouse", "pghngdp", "pghqwage")
+
+# set prior 
+prior.pgh <- set_prior(Y = df.pgh.model, freq = c("m", "m", "m", "m", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+
+# print prior to check 
+prior.pgh 
+
+# pull summary of prior 
+summary(prior.pgh)
+```
+## Update Prior for forecasting 
+```{r} 
+prior.pgh <- update_prior(prior.pgh, n_fcst = 24) 
+
+# check to make sure it went through 
+summary(prior.pgh)
+```
+## Run pgh only model with minn prior and iw variance 
+```{r} 
+mod.pgh.minn.iw <- estimate_mfbvar(prior.pgh, prior = "minn", variance = "iw") 
+
+mod.pgh.minn.iw
+```
+## Process pgh model results 
+```{r} 
+df.mod.pgh.minn.iw <- predict(mod.pgh.minn.iw, aggregate_fcst = TRUE, pred_bands = .95)
+
+df.mod.pgh.minn.iw 
+
+df.mod.pgh.minn.iw <- as.data.frame(df.mod.pgh.minn.iw)
+```
 ## Print out underlying model of data and two forecasts 
 ```{r}
 write.csv(df1.logs, "C:\\Users\\brobs\\Documents\\mfbvar_data.csv")
 write.csv(df.mod.minn.iw95, "C:\\Users\\brobs\\Documents\\mfbvar_minn_iw_95_fcst.csv")
 write.csv(df.mod.minn.diffuse95, "C:\\Users\\brobs\\Documents\\mfbvar_minn_diffuse_95_exo_fcst.csv")
+write.csv(df.mod.pgh.minn.iw, "C:\\Users\\brobs\\Documents\\mfbvar_pgh_minn_iw_95_fcst.csv")
 ```
