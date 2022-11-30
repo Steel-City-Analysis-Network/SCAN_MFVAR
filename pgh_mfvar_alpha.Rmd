@@ -1,0 +1,44 @@
+---
+title: "Pgh_mfvar_alpha"
+author: "Caleb"
+date: "2022-11-30"
+output: html_document
+---
+# load libraries that I need 
+```{r}
+library(tidyverse) 
+library(dbplyr) 
+library(mfbvar) 
+``` 
+## Load and join Pittsburgh datasets 
+```{r}
+ ## Load and join Pittsburgh datasets 
+
+df.pgh.m <- read.csv("mfvar/pgh.monthly.input.csv")
+
+df.pgh.q <- read.csv("mfvar/pgh.quarterly.input.csv") 
+df.pgh <- full_join(df.pgh.m, df.pgh.q)
+```
+## Load National and State data sets 
+```{r}
+## Load National and State data sets 
+df.nat.pa.m <- read.csv("mfvar/pgh.nat.pa.m.csv")
+df.nat.pa.q <- read.csv("mfvar/pgh.nat.pa.q.csv") 
+
+df.nat.pa <- full_join(df.nat.pa.m, df.nat.pa.q) 
+
+```
+# join quarterly data with each other and monthly data with each other to 
+```{r}
+# join quarterly
+df.q <- full_join(df.pgh.q, df.nat.pa.q) 
+
+# monthly data 
+
+df.m <- full_join(df.pgh.m, df.nat.pa.m) 
+```
+##Join pgh and national/state variables together 
+```{r}
+# the national and state variables should enter the model as exogenous but the package doesn't really allow that, we're going to try and tinker with it but will also run model where they aren't exogenous 
+df1 <- full_join(df.m, df.q)
+```
