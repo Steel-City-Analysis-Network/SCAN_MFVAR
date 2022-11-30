@@ -9,6 +9,8 @@ output: html_document
 library(tidyverse) 
 library(dbplyr) 
 library(mfbvar) 
+library(purrr)
+library(lubridate)
 ``` 
 ## Load and join Pittsburgh datasets 
 ```{r}
@@ -18,6 +20,8 @@ df.pgh.m <- read.csv("mfvar/pgh.monthly.input.csv")
 
 df.pgh.q <- read.csv("mfvar/pgh.quarterly.input.csv") 
 df.pgh <- full_join(df.pgh.m, df.pgh.q)
+
+# give us all the pgh specfic variables in one dataframe 
 ```
 ## Load National and State data sets 
 ```{r}
@@ -27,18 +31,16 @@ df.nat.pa.q <- read.csv("mfvar/pgh.nat.pa.q.csv")
 
 df.nat.pa <- full_join(df.nat.pa.m, df.nat.pa.q) 
 
-```
-# join quarterly data with each other and monthly data with each other to 
-```{r}
-# join quarterly
-df.q <- full_join(df.pgh.q, df.nat.pa.q) 
+# gives us all of the national and state exogenous variables in one dataframe 
 
-# monthly data 
-
-df.m <- full_join(df.pgh.m, df.nat.pa.m) 
 ```
+
 ##Join pgh and national/state variables together 
 ```{r}
+# load full quarterly data and full monthly data, did the quarterly and monthly combining in excel cause it was easier, also had to switch quarterly data to last quarter of the month not the first, easier to do in excel 
+df.q <- read.csv("mfvar/all.q.data.pgh.csv") 
+df.m <- read.csv("mfvar/all.m.data.pgh.csv") 
+
 # the national and state variables should enter the model as exogenous but the package doesn't really allow that, we're going to try and tinker with it but will also run model where they aren't exogenous 
 df1 <- full_join(df.m, df.q)
 
@@ -47,6 +49,14 @@ df.pgh.gdp <- read.csv("mfvar/EstimatedPGHgdp.csv")
 # get rid of x column in pittsburgh gdp data 
 df.pgh.gdp <- df.pgh.gdp %>% 
   select("DATE", "pghngdp") 
+# make DATE as.date for pgh gdp to add 2 months 
+df.pgh.gdp$DATE <- as.Date(df.pgh.gdp$DATE)
+# shift data forward to last month of quarter, need lubrdicate package for months function 
+df.pgh.gdp$DATE <- df.pgh.gdp$DATE + months(2)
+
+# make df1$DATE a date type to be able to join 
+df1$DATE <- as.Date(df1$DATE)
+# join the pittsburgh gdp data with everything else 
 
 df1 <- full_join(df1, df.pgh.gdp) 
 ```
@@ -67,8 +77,8 @@ df1.logs <- df1 %>%
          fpi = log_diff(fpi, lag = 3), 
          patax = log_diff(patax, lag =3),
          pghaww = log_diff(pghaww, lag = 3), 
-         # pghmanuf is different because its already a growth rate comparing this quarter from the year before 
-         pghmanuf = log(pghmanuf), 
+         # pghmanuf is different because its already a growth rate comparing this quarter from the year before, tried #log level but was negative so just went with raw value, something we need to discuss 
+         pghmanuf = pghmanuf, 
          pghawwp = log_diff(pghawwp, lag =3), 
          pghhouse = log_diff(pghhouse, lag = 3), 
          pghngdp = log_diff(pghngdp, lag = 3),
@@ -91,10 +101,62 @@ ls(df1)
 ## clean up dates to start with full row and end with full row 
 # create dummy variable to remove rows 
 df1.logs$dummy <- seq.int(nrow(df1.logs))
-# remove pghavghourearn, doesn't start til 2007, row number 121, and last full row of data is Q3 of 2020 cause of pgh gdp 
+# remove pghavghourearn, doesn't start til 2007, 
+# first full row is 2001-06-01, dummy row number 6 
+# last full row is 2020-12-01, dummy row number 240 
 df1.logs <- df1.logs %>% 
-  filter(dummy >= 121 & dummy <= 370) %>% 
-  select(-"pghavghourearn", -"dummy")
-
-# remove first row 
+  filter(dummy >= 6 & dummy <= 240) %>% 
+  select(-"dummy", -"pghavghourearn") 
 ```
+## Set Prior 
+```{r}
+#set the prior, freq = c(put the frequency of every variable, going to be annoying for big data sets, not sure what n_burnin and n_reps does)
+prior <- set_prior(Y = df1.logs, freq = c("m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "q", "q", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+
+# print prior to see what kinds of prior we can use 
+prior 
+# get summary of prior to check everything 
+summary(prior)
+#plot prior to get it visualized 
+plot(prior) 
+```
+## Set hyperparameters 
+```{r} 
+# this is where we would run the mdd and set the lamadas to our specfic needs using mdd, still need to trouble shoot the mdd process, can probably use the alpha verison to do so 
+```
+## Update Prior for forecasting 
+```{r} 
+# NEED to do this otherwise the model won't forecast out, a lot of the heavy lifting is done by the prior in the package
+# n_fcst is # of periods out that we want to forecast, standard is 24 periods, months, out, so 2 years 
+
+prior <- update_prior(prior, n_fcst = 24)
+
+# pull summary to make sure it got updated 
+summary(prior)
+```
+
+## Run model with Minn Prior and IW variances 
+```{r} 
+# use 95% confidence intervals, with Bayesian interpt reads at 95% chance of ___ happening 
+mod.minn.iw95 <- estimate_mfbvar(prior, prior = "minn", variance = "iw") 
+
+# check everything in model 
+mod.minn.iw95 
+```
+# Process Results using predict function 
+```{r} 
+# predict model w/ 95% confidence interval 
+
+df.mod.minn.iw95<- predict(mod.minn.iw95, aggregate_fcst = TRUE, pred_bands = .95)
+
+df.mod.minn.iw95
+ # store as data frame 
+df.mod.minn.iw95 <- as.data.frame(df.mod.minn.iw95)
+```
+## Plot results 
+```{r} 
+# this is the function you would use but I commented it because it was bugging my computer 
+#plot(mod.minn.iw95)
+plot(mod.minn.iw95, plot_start = "2005-03-01", nrow_facet = 3)
+```
+## Run Model with Block Exogenous variables 
