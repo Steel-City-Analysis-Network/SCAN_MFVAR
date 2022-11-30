@@ -11,6 +11,7 @@ library(purrr)
 library(tidyverse)
 library(dbplyr)
 library(mfbvar)
+library(parallel)
 ```
 
 ## Load in Data 
@@ -154,8 +155,50 @@ prior <- update_prior(prior, d = "intercept",
 
 plot(prior)
 
+
+
 # update prior to specficy how long you want to forecast out 
 prior <- update_prior(prior, n_fcst = 24)
+
+#grid search for hyperparameters
+
+#search for lambda 1 given lambda3 = 1
+ par_fun <- function(lambda1, prior) {
+  set.seed(2019)
+  mod_par <- estimate_mfbvar(prior, prior = "ss", variance = "iw",
+  lambda1 = lambda1, lambda3 = 1)
+  mdd(mod_par)
+ }
+
+#run grid search
+cl <- makeCluster(4)
+clusterEvalQ(cl, library("mfbvar"))
+lambda1_seq <- seq(0.05, 1, by = 0.05)
+lambda1_result <- parSapply(cl, lambda1_seq,
+  par_fun, prior = prior)
+stopCluster(cl)
+
+#update prior with new lambda1
+prior <- update_prior(prior, lambda1 = lambda1_result)
+
+#search for lambda 2 given lambda3 = 1
+ par_fun <- function(lambda2, prior) {
+  set.seed(2019)
+  mod_par <- estimate_mfbvar(prior, prior = "ss", variance = "iw",
+  lambda2 = lambda2, lambda3 = 1)
+  mdd(mod_par)
+ }
+
+#run grid search
+cl <- makeCluster(4)
+clusterEvalQ(cl, library("mfbvar"))
+lambda2_seq <- seq(0.05, 1, by = 0.05)
+lambda2_result <- parSapply(cl, lambda1_seq,
+  par_fun, prior = prior)
+stopCluster(cl)
+
+#update prior with new lambda1
+prior <- update_prior(prior, lambda2 = lambda2_result)
 
 # pull summary of prior 
 summary(prior)
