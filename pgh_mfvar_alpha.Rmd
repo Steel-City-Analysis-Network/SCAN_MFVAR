@@ -147,17 +147,32 @@ mod.minn.iw95
 ```{r} 
 # predict model w/ 95% confidence interval 
 
-df.mod.minn.iw95<- predict(mod.minn.iw95, aggregate_fcst = TRUE, pred_bands = .95)
+df.mod.minn.iw95<- predict(mod.minn.iw95, aggregate_fcst = FALSE, pred_bands = .95)
 
 df.mod.minn.iw95
  # store as data frame 
 df.mod.minn.iw95 <- as.data.frame(df.mod.minn.iw95)
 ```
+## Run model with Minn prior and Diffuse variance 
+```{r} 
+## didn't work, Error in mcmc_minn_diffuse(Y[-(1:n_lags), ], Pi, Sigma, Z, Z_fcst, aux, : 
+##chol(): decomposition failed
+```
+## Predict minn prior and diffuse variance model 
+```{r} 
+# predict model w/ 95% confidence interval 
+
+df.mod.minn.diffuse95<- predict(mod.minn.diffuse95, aggregate_fcst = FALSE, pred_bands = .95)
+
+df.mod.minn.diffuse95
+ # store as data frame 
+df.mod.minn.diffuse95 <- as.data.frame(df.mod.minn.diffuse95)
+```
 ## Plot results 
 ```{r} 
 # this is the function you would use but I commented it because it was bugging my computer 
 #plot(mod.minn.iw95)
-plot(mod.minn.iw95, plot_start = "2005-03-01", nrow_facet = 3)
+##plot(mod.minn.iw95, plot_start = "2005-03-01", nrow_facet = 3)
 ```
 ## Run Model with Block Exogenous variables 
 ## Set Prior 
@@ -189,7 +204,7 @@ mod.minn.diffuse
 ```{r} 
 # predict model w/ 95% confidence interval 
 
-df.mod.minn.diffuse95 <- predict(mod.minn.diffuse, aggregate_fcst = TRUE, pred_bands = .95)
+df.mod.minn.diffuse95 <- predict(mod.minn.diffuse, aggregate_fcst = FALSE, pred_bands = .95)
 
 df.mod.minn.diffuse95
  # store as data frame 
@@ -226,7 +241,7 @@ mod.pgh.minn.iw
 ```
 ## Process pgh model results 
 ```{r} 
-df.mod.pgh.minn.iw <- predict(mod.pgh.minn.iw, aggregate_fcst = TRUE, pred_bands = .95)
+df.mod.pgh.minn.iw <- predict(mod.pgh.minn.iw, aggregate_fcst = FALSE, pred_bands = .95)
 
 df.mod.pgh.minn.iw 
 
