@@ -6,6 +6,7 @@ output: html_document
 ---
 # load libraries that I need 
 ```{r}
+rm(list=ls())
 library(tidyverse) 
 library(dbplyr) 
 library(mfbvar) 
@@ -69,7 +70,7 @@ library(stats)
 # create log_diff function to do the lags, different from the one in the package but not sure what 1200 is doing there so 
 # going to use log_diff from package but I think we should create our own function, doesn't look right 
 
-log_diff <- function(x, lag = 1) {c(rep(NA, lag), 1200/lag * diff(log(x), lag = lag))} 
+log_diff <- function(x, lag = 1) {c(rep(NA, lag), 12/lag * diff(log(x), lag = lag))} 
 ## create new df thats changed to logs 
 df1.logs <- df1 %>% 
   mutate( 
@@ -95,6 +96,30 @@ df1.logs <- df1 %>%
           pcepi = log_diff(pcepi), 
          pcepilfe = log_diff(pcepilfe), 
           paclaims = log_diff(paclaims))
+df2.logs <- df1 %>% 
+  mutate(
+      # do the quarterly variables with lag 3 to get log growth between quarterly inputs  
+         fpi = log(fpi), 
+         patax = log(patax),
+         pghaww = log(pghaww), 
+         # pghmanuf is different because its already a growth rate comparing this quarter from the year before, tried #log level but was negative so just went with raw value, something we need to discuss 
+         pghmanuf = pghmanuf, 
+         pghawwp = log(pghawwp), 
+         pghhouse = log(pghhouse), 
+         pghngdp = log(pghngdp),
+         pghqwage = log(pghqwage), 
+# do monthly variables 
+          pghunemp = log(pghunemp),
+         pghcivlabforce = log(pghcivlabforce), 
+         baa = log(baa), 
+         fedfunds = log(fedfunds),
+         gs10 = log(gs10),
+        pghavghourearn = log(pghavghourearn), 
+        pghpermits = log(pghpermits),
+         pghempmanuf = log(pghempmanuf), 
+          pcepi = log(pcepi), 
+         pcepilfe = log(pcepilfe), 
+          paclaims = log(paclaims))
 ## print out coulmn names to double check 
 ls(df1)
 
@@ -107,11 +132,21 @@ df1.logs$dummy <- seq.int(nrow(df1.logs))
 df1.logs <- df1.logs %>% 
   filter(dummy >= 6 & dummy <= 240) %>% 
   select(-"dummy", -"pghavghourearn") 
+
+# clean up dates for d2 
+# create dummy variable to remove rows 
+df2.logs$dummy <- seq.int(nrow(df2.logs))
+# remove pghavghourearn, doesn't start til 2007, 
+# first full row is 2001-06-01, dummy row number 6 
+# last full row is 2020-12-01, dummy row number 240 
+df2.logs <- df2.logs %>% 
+  filter(dummy >= 6 & dummy <= 240) %>% 
+  select(-"dummy", -"pghavghourearn") 
 ```
 ## Set Prior 
 ```{r}
 #set the prior, freq = c(put the frequency of every variable, going to be annoying for big data sets, not sure what n_burnin and n_reps does)
-prior <- set_prior(Y = df1.logs, freq = c("m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "q", "q", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+prior <- set_prior(Y = df2.logs, freq = c("m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "q", "q", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
 
 # print prior to see what kinds of prior we can use 
 prior 
@@ -119,10 +154,39 @@ prior
 summary(prior)
 #plot prior to get it visualized 
 plot(prior) 
+
+
 ```
 ## Set hyperparameters 
 ```{r} 
-# this is where we would run the mdd and set the lamadas to our specfic needs using mdd, still need to trouble shoot the mdd process, can probably use the alpha verison to do so 
+library(parallel)
+#search for lambda 1 given lambda3 = 1
+ par_fun <- function(lambda1, prior) {
+  set.seed(2019)
+  mod_par <- estimate_mfbvar(prior, prior = "minn", variance = "iw",
+  lambda1 = lambda1, lambda3 = 1)
+  mdd(mod_par)
+}
+  
+#run grid search
+cl <- makeCluster(4)
+clusterEvalQ(cl, library("mfbvar"))
+lambda1_seq <- seq(0.05, 1, by = 0.05)
+lambda1_result <- parSapply(cl, lambda1_seq,
+  par_fun, prior = prior)
+stopCluster(cl)
+## Graph grid search 
+plot_df <- tibble(lamba1 = lambda1_seq, mdd = result) 
+ggplot(plot_df, aes(x = lambda1, y = mdd)) + 
+  geom_line() + 
+  geom_point(data = filter(plot_df, mdd == max(mdd))) + 
+  labs(y = "Marginal data density (log)", 
+       x =  bquote(lambda[1])) + 
+  theme_minimal()
+#update prior with new lambda1
+prior <- update_prior(prior2, lambda1 = mean(lambda1_result))
+ 
+
 ```
 ## Update Prior for forecasting 
 ```{r} 
@@ -155,6 +219,13 @@ df.mod.minn.iw95 <- as.data.frame(df.mod.minn.iw95)
 ```
 ## Run model with Minn prior and Diffuse variance 
 ```{r} 
+#prior.diff <- set_prior(Y = df1.logs, block_exo = NULL, freq = c("m", "m", "m", "m", "m", "m", "m", "m", "m", "m", "q", "q", "q", "q", "q", "q", "q", "q"), n_lags = 4, n_burnin = 1000, n_reps = 1000)
+
+#prior.diff <- update_prior(prior.diff, n_fcst = 24) 
+
+#modd.minn.diffuse95 <- estimate_mfbvar(prior.diff, prior = "minn", variance = "diffuse")
+
+
 ## didn't work, Error in mcmc_minn_diffuse(Y[-(1:n_lags), ], Pi, Sigma, Z, Z_fcst, aux, : 
 ##chol(): decomposition failed
 ```
@@ -162,11 +233,11 @@ df.mod.minn.iw95 <- as.data.frame(df.mod.minn.iw95)
 ```{r} 
 # predict model w/ 95% confidence interval 
 
-df.mod.minn.diffuse95<- predict(mod.minn.diffuse95, aggregate_fcst = FALSE, pred_bands = .95)
+#df.mod.minn.diffuse95<- predict(mod.minn.diffuse95, aggregate_fcst = FALSE, pred_bands = .95)
 
-df.mod.minn.diffuse95
+#df.mod.minn.diffuse95
  # store as data frame 
-df.mod.minn.diffuse95 <- as.data.frame(df.mod.minn.diffuse95)
+#df.mod.minn.diffuse95 <- as.data.frame(df.mod.minn.diffuse95)
 ```
 ## Plot results 
 ```{r} 
@@ -196,7 +267,9 @@ summary(prior.exo)
 ```
 ## Run model with Minn prior and variance = diffuse 
 ```{r} 
-mod.minn.diffuse <- estimate_mfbvar(prior.exo, prior = "minn", vairnace = "diffuse") 
+mod.minn.diffuse <- estimate_mfbvar(prior.exo, prior = "minn", variance = "diffuse") 
+
+# mispell variance but it really doesn't work :(
 
 mod.minn.diffuse 
 ```
