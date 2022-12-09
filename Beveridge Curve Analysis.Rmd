@@ -1,0 +1,178 @@
+---
+title: "Beveridge Curve"
+author: "Caleb"
+date: "2022-11-11"
+output: html_document
+---
+
+```{r}
+library(tidyverse) 
+library(ggplot2)
+library(ggthemes)
+library(dbplyr)
+library(stringr)
+
+df <- read.csv("SCAN/bev.input.csv") 
+df$month <- str_sub(df$year, 6, 7)
+df$year.g <- substr(df$year, 1, 4) 
+
+df1 <- df %>% 
+  filter(year > 2000) %>% 
+  select("year", "month", "year.g", "pa_unempl_rate", "pa_job_openings")
+df2 <- df1  
+df2$year.g <- as.integer(df2$year.g)
+df2$month <- as.integer(df2$month)
+# make different data sets because need year.g as character for discrete scale but need it as a integer to run the logic and create groups 
+# create a unique number for each variable and then sort into groups by using numbers and greater than statemetns 
+df2$group <- c(1:273)
+df3 <- df2 %>% 
+  filter(group > 11)
+
+df3$graph.group <- ifelse(12 <= df3$group & df3$group <= 14, 1, 
+                          ifelse(15 <= df3$group & df3$group <= 23, 2, 
+                                 ifelse(24 <= df3$group & df3$group <= 95, 3, 
+                                        ifelse(96 <= df3$group & df3$group <= 114, 4, 
+                                               ifelse(115 <= df3$group & df3$group <= 242, 5, 
+                                                      ifelse(243 <= df3$group & df3$group<= 244, 6, 
+                                                             ifelse(df3$group >= 245, 7,
+                                                                    NA))))))) 
+
+# keep var of numbers to make filtering easier later, put it in strings to make it a better graph 
+df3$group.g <- ifelse(df3$graph.group == 1, "Dec 2000 - Feb 2001", 
+                          ifelse(df3$graph.group == 2, "Mar 2001 - Nov 2001", 
+                                 ifelse(df3$graph.group == 3, "Dec 2001 - Nov 2007", 
+                                        ifelse(df3$graph.group == 4, "Dec 2007 - Jun 2009", 
+                                               ifelse(df3$graph.group == 5, "Jul 2009 - Feb 2020", 
+                                                      ifelse(df3$graph.group == 6, "Mar 2020 - Apr 2020", 
+                                                             ifelse(df3$graph.group == 7, "May 2020 - Sept 2022",
+                                                                    NA))))))) 
+```
+## Graph with BLS groups 
+```{r} 
+df3$graph.group <- as.character(df3$graph.group)
+pg <- ggplot(data = df3, mapping = aes(x = pa_unempl_rate, y = pa_job_openings, color = group.g)) 
+pg + geom_point() + 
+  geom_line() 
+``` 
+## Use US data 
+```{r} 
+df.us <- read.csv("SCAN/bev.input.updated.csv")
+df.us$month <- str_sub(df.us$year, 6, 7)
+df.us$year.g <- substr(df.us$year, 1, 4)
+
+df1.us <- df.us %>% 
+  filter(year > 2000) %>% 
+  select("year", "month", "year.g", "pa_unempl_rate", "pa_job_openings", "us_job_openings", "us_ur")
+df2.us <- df1.us  
+df2.us$year.g <- as.integer(df2.us$year.g)
+df2.us$month <- as.integer(df2.us$month)
+# make different data sets because need year.g as character for discrete scale but need it as a integer to run the logic and create groups 
+# create a unique number for each variable and then sort into groups by using numbers and greater than statemetns 
+df2.us$group <- c(1:274)
+df3.us <- df2.us %>% 
+  filter(group > 11 & group < 274)
+
+df3.us$graph.group <- ifelse(12 <= df3.us$group & df3.us$group <= 14, 1, 
+                          ifelse(15 <= df3.us$group & df3.us$group <= 23, 2, 
+                                 ifelse(24 <= df3.us$group & df3.us$group <= 95, 3, 
+                                        ifelse(96 <= df3.us$group & df3.us$group <= 114, 4, 
+                                               ifelse(115 <= df3.us$group & df3.us$group <= 242, 5, 
+                                                      ifelse(243 <= df3.us$group & df3.us$group<= 244, 6, 
+                                                             ifelse(df3.us$group >= 245, 7,
+                                                                    NA))))))) 
+
+# keep var of numbers to make filtering easier later, put it in strings to make it a better graph 
+df3.us$group.discrete <- ifelse(df3.us$graph.group == 1, "Dec 2000 - Feb 2001", 
+                          ifelse(df3.us$graph.group == 2, "Mar 2001 - Nov 2001", 
+                                 ifelse(df3.us$graph.group == 3, "Dec 2001 - Nov 2007", 
+                                        ifelse(df3.us$graph.group == 4, "Dec 2007 - Jun 2009", 
+                                               ifelse(df3.us$graph.group == 5, "Jul 2009 - Feb 2020", 
+                                                      ifelse(df3.us$graph.group == 6, "Mar 2020 - Apr 2020", 
+                                                             ifelse(df3.us$graph.group == 7, "May 2020 - Sept 2022",
+                                                                    NA))))))) 
+```
+## Transform combined data to graph 
+```{r} 
+p.us1 <- ggplot(data = df3.us, mapping = aes(x = us_ur, y = us_job_openings)) + geom_point() + geom_line(aes(linetype = "dashed"))
+p.pa1 <- ggplot(data = df3.us, mapping = aes(x = pa_unempl_rate, y = pa_job_openings)) 
+p.us <- ggplot(data = df3.us, mapping = aes(color = group.discrete)) 
+
+p.us +  geom_point(mapping = aes(x = us_ur, y = us_job_openings)) +
+  geom_line(mapping = aes(x = us_ur, y = us_job_openings, linetype = "longdash")) +
+  geom_point(mapping = aes(x = pa_unempl_rate, y = pa_job_openings)) + 
+  geom_line(mapping = aes(x = pa_unempl_rate, y = pa_job_openings))
+  
+
+##all i need to do is change the line type or color manually when I go to graph the combined graph 
+```
+## Run linear Regression
+```{r}
+fit <- lm(data = df3, pa_job_openings ~ pa_unempl_rate + I(pa_unempl_rate ^ 2) + I(pa_unempl_rate ^ 3)) 
+summary(fit) 
+
+fit2 <- lm(data = df3, pa_job_openings ~ I(1/pa_unempl_rate)) 
+summary(fit2) 
+  
+fit3 <- lm(data = df3, pa_job_openings ~ I(1/pa_unempl_rate^2))
+summary(fit3)
+
+fit1.y <- predict(fit, newdata = df3) 
+fit2.y <- predict(fit2, newdata = df3) 
+fit1.y
+df3$predict <- fit1.y 
+
+df3$predict1_x <- fit2.y 
+```
+
+``` {r} 
+p.lm <- ggplot(data = df3, mapping = aes(x = pa_unempl_rate, y = predict, color = graph.group)) + geom_line() 
+p.lm + geom_point(mapping = aes(y = pa_job_openings))
+
+
+p.lm2 <- p.lm <- ggplot(data = df3, mapping = aes(x = pa_unempl_rate, y = predict1_x, color = graph.group)) + geom_line() 
+p.lm + geom_point(mapping = aes(y = pa_job_openings))
+```
+## Graph pa vs pa 
+
+```{r}
+
+
+p <- ggplot(data = df1, mapping = aes(x = pa_unempl_rate, y = pa_job_openings)) 
+
+p + geom_point(aes(color = year.g)) 
+```
+
+## Graph pgh vs pa 
+
+You can also embed plots, for example:
+
+```{r} 
+
+df2 <- df %>% 
+  filter(year > 2000) %>% 
+  select("year", "year.g", "pgh_unemploy_rate", "pa_job_openings")
+
+p1 <- ggplot(data = df2, mapping = aes(x = pgh_unemploy_rate, y = pa_job_openings)) 
+
+p1 + geom_point(aes(color = year.g)) 
+```
+
+```{r} 
+df.diff <- df %>% 
+  filter(year >= 1990) %>% 
+  select("year", "pa_unempl_rate", "pgh_unemploy_rate") 
+
+df.d.g <- df.diff %>% 
+  select("year", "pa_unempl_rate", "pgh_unemploy_rate") %>% 
+  gather(key = "variable", value = "value", -year)
+
+df.diff$diff <- df.diff$pgh_unemploy_rate - df.diff$pa_unempl_rate
+
+summary(df.diff$diff)
+
+p.diff <- ggplot(data = df.d.g, mapping = aes(x = year, y = value)) 
+
+p.diff + geom_point(aes(color = variable)) 
+
+``` 
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
