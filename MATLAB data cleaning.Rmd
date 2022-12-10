@@ -74,7 +74,7 @@ df.q$DATE1 <- paste(df.q$year, df.q$q, df.q$quarter.number, sep = "")
 ## reselect the coulms we need in the order we need them 
 
 df.q2 <- df.q %>% 
-  select("DATE1", "pghngdp", "fpi", "old.q.number", "patax", "pghaww", "pghawwp", "pghhouse", "pghmanuf", "pghqwage")
+  select("DATE1", "pghngdp", "fpi", "patax", "pghaww", "pghawwp", "pghhouse", "pghmanuf", "pghqwage")
 
 df.q2 <- df.q2 %>% 
   rename(DATE = DATE1)
@@ -100,7 +100,7 @@ df.m$DATE1 <- paste(df.m$year, df.m$m, df.m$monthnumber, sep = "")
 ## reselect the coulms we need in the order we need them 
 ls(df.m)
 df.m2 <- df.m %>% 
-  select("DATE1","baa", "fedfunds", "gs10", "monthnumber", "paclaims", "pcepi", "pcepilfe", "pghcivlabforce", "pghempmanuf", "pghpermits", "pghunemp")
+  select("DATE1","baa", "fedfunds", "gs10", "paclaims", "pcepi", "pcepilfe", "pghcivlabforce", "pghempmanuf", "pghpermits", "pghunemp")
 
 df.m2 <- df.m2 %>% 
   rename(DATE = DATE1)
@@ -112,15 +112,15 @@ log_diff <- function(x, lag = 1) {c(rep(NA, lag), 12/lag * diff(log(x), lag = la
 df.q2.logs<- df.q2 %>% 
   mutate( 
   # do the quarterly variables with lag 3 to get log growth between quarterly inputs  
-         fpi = log_diff(fpi, lag = 3), 
-         patax = log_diff(patax, lag =3),
-         pghaww = log_diff(pghaww, lag = 3), 
+         fpi = log_diff(fpi), 
+         patax = log_diff(patax),
+         pghaww = log_diff(pghaww), 
          # pghmanuf is different because its already a growth rate comparing this quarter from the year before, tried #log level but was negative so just went with raw value, something we need to discuss 
          pghmanuf = pghmanuf, 
-         pghawwp = log_diff(pghawwp, lag =3), 
-         pghhouse = log_diff(pghhouse, lag = 3), 
-         pghngdp = log_diff(pghngdp, lag = 3),
-         pghqwage = log_diff(pghqwage, lag = 3)) 
+         pghawwp = log_diff(pghawwp), 
+         pghhouse = log_diff(pghhouse), 
+         pghngdp = log_diff(pghngdp),
+         pghqwage = log_diff(pghqwage)) 
 df.m2.logs <- df.m2 %>% 
   mutate(
           pghunemp = log_diff(pghunemp),
@@ -136,7 +136,7 @@ df.m2.logs <- df.m2 %>%
 ```
 ## Output data sets 
 ```{r} 
-write.csv(df.m2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpah.data.csv")
-write.csv(df.q2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpha.data.csv")
+write.csv(df.m2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpha.data.csv")
+write.csv(df.q2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.quarterly.alpha.data.csv")
 ```
 
