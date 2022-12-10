@@ -1,0 +1,142 @@
+---
+title: "MFVAR BEAR Data Cleaning"
+author: "Caleb"
+date: "2022-12-10"
+output: html_document
+---
+
+# load libraries that I need 
+```{r}
+rm(list=ls())
+library(tidyverse) 
+library(dbplyr) 
+library(mfbvar) 
+library(purrr)
+library(lubridate)
+library(stringr)
+``` 
+## Load and join Pittsburgh datasets 
+```{r}
+ ## Load and join Pittsburgh datasets 
+
+df.pgh.m <- read.csv("mfvar/pgh.monthly.input.csv")
+
+df.pgh.q <- read.csv("mfvar/pgh.quarterly.input.csv") 
+df.pgh <- full_join(df.pgh.m, df.pgh.q)
+
+# give us all the pgh specfic variables in one dataframe 
+```
+## Load National and State data sets 
+```{r}
+## Load National and State data sets 
+df.nat.pa.m <- read.csv("mfvar/pgh.nat.pa.m.csv")
+df.nat.pa.q <- read.csv("mfvar/pgh.nat.pa.q.csv") 
+
+df.nat.pa <- full_join(df.nat.pa.m, df.nat.pa.q) 
+
+# gives us all of the national and state exogenous variables in one dataframe 
+
+```
+
+##Join pgh and national/state variables together 
+```{r}
+df.q0 <- read.csv("mfvar/all.q.data.pgh.csv") 
+df.m <- read.csv("mfvar/all.m.data.pgh.csv") 
+
+```
+## Clean quarterlyt Data for MATLAB 
+```{r} 
+## Add in pittsburgh nominal gdp data 
+# load in estimated pittsburgh gdp data 
+df.pgh.gdp <- read.csv("mfvar/EstimatedPGHgdp.csv") 
+# get rid of x column in pittsburgh gdp data 
+df.pgh.gdp <- df.pgh.gdp %>% 
+  select("DATE", "pghngdp") 
+# make DATE as.date for pgh gdp to add 2 months 
+df.pgh.gdp$DATE <- as.Date(df.pgh.gdp$DATE)
+# shift data forward to last month of quarter, need lubrdicate package for months function 
+df.pgh.gdp$DATE <- df.pgh.gdp$DATE + months(2)
+
+# make df1$DATE a date type to be able to join 
+df.q0$DATE <- as.Date(df.q0$DATE) 
+
+df.q <- full_join(df.q0, df.pgh.gdp)
+library(dbplyr)
+df.q$old.q.number <- substr(df.q$DATE, 6, 7)
+df.q$quarter.number <- ifelse(df.q$old.q.number == "03", "1", 
+                              ifelse(df.q$old.q.number == "06", "2", 
+                                     ifelse(df.q$old.q.number == "09", "3", 
+                                            "4")))
+df.q$q <- "q"
+df.q$year <- substr(df.q$DATE, 1,4)
+
+df.q$DATE1 <- paste(df.q$year, df.q$q, df.q$quarter.number, sep = "")
+## reselect the coulms we need in the order we need them 
+
+df.q2 <- df.q %>% 
+  select("DATE1", "pghngdp", "fpi", "old.q.number", "patax", "pghaww", "pghawwp", "pghhouse", "pghmanuf", "pghqwage")
+
+df.q2 <- df.q2 %>% 
+  rename(DATE = DATE1)
+```
+## Clean monthly data for MATLAB 
+```{r} 
+df.m$old.m.number <- substr(df.m$DATE, 6, 7)
+df.m$monthnumber <- ifelse(df.m$old.m.number == "01", "1", 
+                              ifelse(df.m$old.m.number == "02", "2", 
+                                     ifelse(df.m$old.m.number == "03", "3", 
+                                            ifelse(df.m$old.m.number == "04", "4", 
+                                                   ifelse(df.m$old.m.number == "05", "5",
+                                                          ifelse(df.m$old.m.number == "06", "6",
+                                                                 ifelse(df.m$old.m.number == "07", "7",
+                                                                        ifelse(df.m$old.m.number == "08", "8",
+                                                                               ifelse(df.m$old.m.number == "09", "9",
+                                                                                      ifelse(df.m$old.m.number == "10", "10",
+                                                                                             ifelse(df.m$old.m.number == "11", "11", "12")))))))))))
+df.m$m <- "m"
+df.m$year <- substr(df.m$DATE, 1,4)
+
+df.m$DATE1 <- paste(df.m$year, df.m$m, df.m$monthnumber, sep = "")
+## reselect the coulms we need in the order we need them 
+ls(df.m)
+df.m2 <- df.m %>% 
+  select("DATE1","baa", "fedfunds", "gs10", "monthnumber", "paclaims", "pcepi", "pcepilfe", "pghcivlabforce", "pghempmanuf", "pghpermits", "pghunemp")
+
+df.m2 <- df.m2 %>% 
+  rename(DATE = DATE1)
+```
+## Turn raw data into log levels 
+```{r} 
+
+log_diff <- function(x, lag = 1) {c(rep(NA, lag), 12/lag * diff(log(x), lag = lag))} 
+df.q2.logs<- df.q2 %>% 
+  mutate( 
+  # do the quarterly variables with lag 3 to get log growth between quarterly inputs  
+         fpi = log_diff(fpi, lag = 3), 
+         patax = log_diff(patax, lag =3),
+         pghaww = log_diff(pghaww, lag = 3), 
+         # pghmanuf is different because its already a growth rate comparing this quarter from the year before, tried #log level but was negative so just went with raw value, something we need to discuss 
+         pghmanuf = pghmanuf, 
+         pghawwp = log_diff(pghawwp, lag =3), 
+         pghhouse = log_diff(pghhouse, lag = 3), 
+         pghngdp = log_diff(pghngdp, lag = 3),
+         pghqwage = log_diff(pghqwage, lag = 3)) 
+df.m2.logs <- df.m2 %>% 
+  mutate(
+          pghunemp = log_diff(pghunemp),
+         pghcivlabforce = log_diff(pghcivlabforce), 
+         baa = log_diff(baa), 
+         fedfunds = log_diff(fedfunds),
+         gs10 = log_diff(gs10),
+        pghpermits = log_diff(pghpermits),
+         pghempmanuf = log_diff(pghempmanuf), 
+          pcepi = log_diff(pcepi), 
+         pcepilfe = log_diff(pcepilfe), 
+          paclaims = log_diff(paclaims))
+```
+## Output data sets 
+```{r} 
+write.csv(df.m2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpah.data.csv")
+write.csv(df.q2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpha.data.csv")
+```
+
