@@ -136,6 +136,8 @@ df.m2.logs <- df.m2 %>%
 ```
 ## Output data sets 
 ```{r} 
+write.csv(df.m2, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpha.data.nonlog.csv")
+write.csv(df.q2, "C:\\Users\\brobs\\Documents\\MATLAB.quarterly.alpha.data.nonlog.csv")
 write.csv(df.m2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.monthly.alpha.data.csv")
 write.csv(df.q2.logs, "C:\\Users\\brobs\\Documents\\MATLAB.quarterly.alpha.data.csv")
 ```
