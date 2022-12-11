@@ -27,7 +27,7 @@ df2 <- df %>%
   fill(pgh.l.s.g)
 
 df2 <- df2 %>% 
-  filter(year1 >= 2001 & year < 2021) 
+  filter(year1 >= 2001 & year < 2022) 
 df2$gdp.hat <- ((4 * df2$q_wages_dollars) / (df2$pgh.l.s.g)) 
 
 g <- df2 %>% 
@@ -65,9 +65,8 @@ gdp.comp.graph$year1 <- substr(gdp.comp.graph$year, 1, 4)
 
 p2 <- ggplot(data = gdp.comp.graph, mapping = aes(x = year, y = value)) 
 p2 + geom_point(aes(color = variable)) + 
-  scale_x_discrete(breaks = gdp.comp.graph$year[c(T,F,F,F,F)]) + 
+  scale_x_discrete(breaks = gdp.comp.graph$year[c(T,F,F,F)]) + 
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
-
 ```
 
 ## Calibration Values 
@@ -80,17 +79,12 @@ p.p <- ggplot(data = df3, mapping = aes(x = cali.percent))
 p.p + geom_histogram() 
 summary(df3$cali)
 summary(df3$cali.percent)
-
-
 ```
-```{r} 
-
-
+```{r}
 ## make a percent change in labor share of gdp 
 df3.y$labor_share_percentchange <- (((lag(df3.y$pgh_labor_share_gdp) - df3.y$pgh_labor_share_gdp) / lag(df3.y$pgh_labor_share_gdp))  * 100)
 
 summary(df3.y$labor_share_percentchange)
-
 ```
 ## Plot average Q GDP hat (annual) and known gdp 
 ```{r}
@@ -101,7 +95,6 @@ gdp.graph <- df3.y %>%
 p.g <- ggplot(data = gdp.graph, mapping = aes(x = year, y = value)) 
 p.g + geom_point(aes(color = variable)) + 
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
-  
 ```
 ## basic plots of labor share and gdp
 
@@ -145,9 +138,6 @@ annual.us1 <- annual.us  %>%
 
 # join annual and quarterly us data 
 df.us <- full_join(annual.us1, q.us)
-
-
-
 ```
 
 ## Output gdp hat data to use in mfvar 
