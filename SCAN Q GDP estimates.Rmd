@@ -47,8 +47,7 @@ df3$cali.percent <- df3$cali / df3$pgh_gdp_dollars
 ## Plot GDP and Q GDP hat 
 ```{r} 
 # output calibration values in dollars 
-df3$cali.percent.subset <- ifelse(is.na(df3$cali.percent), 0, 
-                                  1)
+df3$cali.percent.subset <- ifelse(is.na(df3$cali.percent), 0, 1)
 df3.y <- df3 %>% 
   filter(cali.percent.subset == 1)
 
@@ -66,7 +65,8 @@ gdp.comp.graph$year1 <- substr(gdp.comp.graph$year, 1, 4)
 
 p2 <- ggplot(data = gdp.comp.graph, mapping = aes(x = year, y = value)) 
 p2 + geom_point(aes(color = variable)) + 
-  scale_x_discrete(breaks = gdp.comp.graph$year[c(T,F,F,F,F)]) 
+  scale_x_discrete(breaks = gdp.comp.graph$year[c(T,F,F,F,F)]) + 
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
 
 ```
 
@@ -99,7 +99,8 @@ gdp.graph <- df3.y %>%
   gather(key = "variable", value = "value", -year)
 
 p.g <- ggplot(data = gdp.graph, mapping = aes(x = year, y = value)) 
-p.g + geom_point(aes(color = variable))
+p.g + geom_point(aes(color = variable)) + 
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
   
 ```
 ## basic plots of labor share and gdp
